@@ -1,13 +1,30 @@
 const gameData = {
 	players: [],
-	playerQuestions: {}, // Maps each player to their unique set of questions
+	playerQuestions: {},
 	scores: {},
 	subject: '',
 	difficulty: 4,
 	timer: null,
 	timeLeft: 15,
-	currentTurn: 0, // Tracks the current player's turn
-	selectedAnswer: null, // Tracks the current selected answer
+	currentTurn: 0,
+	selectedAnswer: null,
+	allQuestions: null,
+}
+
+const resetGameData = () => {
+	gameData.players = []
+	gameData.playerQuestions = {}
+	gameData.scores = {}
+	gameData.subject = ''
+	gameData.difficulty = 4
+	gameData.timeLeft = 15
+	gameData.currentTurn = 0
+	gameData.selectedAnswer = null
+	gameData.allQuestions = null
+	if (gameData.timer) {
+		clearInterval(gameData.timer)
+		gameData.timer = null
+	}
 }
 
 const getRandomColor = () => {
@@ -29,7 +46,7 @@ const addPlayer = name => {
 	return false
 }
 
-const renderPlayersScreen = () => {
+window.renderPlayersScreen = () => {
 	document.getElementById('game-container').innerHTML = `
     <div>
       <h1>Welcome to Quiz Rush</h1>
@@ -54,7 +71,7 @@ const renderPlayersScreen = () => {
 	})
 }
 
-const addNewPlayer = () => {
+window.addNewPlayer = () => {
 	const playerNameInput = document.getElementById('player-name')
 	const playerName = playerNameInput.value.trim()
 	const errorMessageElement = document.getElementById('error-message')
@@ -69,7 +86,7 @@ const addNewPlayer = () => {
 	}
 }
 
-const renderSubjectScreen = () => {
+window.renderSubjectScreen = () => {
 	if (gameData.players.length === 0) {
 		alert('Please add at least one player before proceeding!')
 		return
@@ -86,117 +103,70 @@ const renderSubjectScreen = () => {
   `
 }
 
-const selectSubject = subject => {
+window.selectSubject = async subject => {
 	gameData.subject = subject
+
+	if (!gameData.allQuestions) {
+		await fetchQuestions()
+	}
+
 	startGame()
 }
 
-const loadQuestions = (subject, difficulty) => {
-	const allQuestions = {
-		HTML: [
-			{
-				question: 'What does HTML stand for?',
-				options: [
-					'HyperText Markup Language',
-					'HyperText Markdown Language',
-					'HighText Machine Language',
-					'Hyperlink Text Markup Language',
-				],
-				correct: 0,
-			},
-			{
-				question: 'Which tag is used for the largest heading?',
-				options: ['<h6>', '<heading>', '<h1>', '<header>'],
-				correct: 2,
-			},
-			{
-				question: 'What attribute specifies an alternate text for an image?',
-				options: ['alt', 'src', 'title', 'href'],
-				correct: 0,
-			},
-			{
-				question: 'What does the <a> tag define?',
-				options: ['Anchor', 'Audio', 'Article', 'Aside'],
-				correct: 0,
-			},
-		],
-		CSS: [
-			{
-				question: 'What does CSS stand for?',
-				options: [
-					'Cascading Style Sheets',
-					'Computer Style Sheets',
-					'Creative Style Sheets',
-					'Colorful Style Sheets',
-				],
-				correct: 0,
-			},
-			{
-				question: 'Which property changes the text color?',
-				options: ['color', 'text-color', 'font-color', 'background-color'],
-				correct: 0,
-			},
-			{
-				question: 'Which value makes an element hidden?',
-				options: [
-					'display: none',
-					'visibility: hidden',
-					'opacity: 0',
-					'All of the above',
-				],
-				correct: 3,
-			},
-			{
-				question: 'What is the default position value in CSS?',
-				options: ['static', 'relative', 'absolute', 'fixed'],
-				correct: 0,
-			},
-		],
-		JS: [
-			{
-				question: 'What does JS stand for?',
-				options: ['JavaScript', 'JavaScope', 'JustScript', 'JScript'],
-				correct: 0,
-			},
-			{
-				question: 'Which company developed JavaScript?',
-				options: ['Microsoft', 'Netscape', 'Sun Microsystems', 'Oracle'],
-				correct: 1,
-			},
-			{
-				question: 'Which symbol is used for comments in JavaScript?',
-				options: ['//', '<!-- -->', '#', '**'],
-				correct: 0,
-			},
-			{
-				question:
-					'What is the default value of an uninitialized variable in JavaScript?',
-				options: ['undefined', 'null', '0', 'NaN'],
-				correct: 0,
-			},
-		],
+const fetchQuestions = async () => {
+	try {
+		const response = await fetch('questions.json')
+		if (!response.ok) {
+			throw new Error('Failed to load questions.')
+		}
+		gameData.allQuestions = await response.json()
+	} catch (error) {
+		alert('Error loading questions: ' + error.message)
 	}
-
-	const questionPool =
-		subject === 'Mixed'
-			? [...allQuestions.HTML, ...allQuestions.CSS, ...allQuestions.JS].sort(
-					() => Math.random() - 0.5
-			  )
-			: [...allQuestions[subject]]
-
-	const questionsPerPlayer = Math.min(
-		difficulty,
-		Math.floor(questionPool.length / gameData.players.length)
-	)
-
-	gameData.players.forEach((player, index) => {
-		gameData.playerQuestions[player.name] = questionPool
-			.filter((_, qIndex) => qIndex % gameData.players.length === index)
-			.slice(0, questionsPerPlayer)
-	})
 }
 
-const startGame = () => {
+const loadQuestions = (subject, difficulty) => {
+	if (!gameData.allQuestions) {
+		alert('Questions are not loaded yet!')
+		return
+	}
+
+	const allQuestions = gameData.allQuestions
+
+	if (subject === 'Mixed') {
+		const allAvailableQuestions = Object.values(allQuestions)
+			.flat()
+			.sort(() => Math.random() - 0.5)
+
+		const questionsPerPlayer = Math.min(
+			difficulty,
+			Math.floor(allAvailableQuestions.length / gameData.players.length)
+		)
+
+		gameData.players.forEach((player, index) => {
+			gameData.playerQuestions[player.name] = allAvailableQuestions
+				.filter((_, qIndex) => qIndex % gameData.players.length === index)
+				.slice(0, questionsPerPlayer)
+		})
+	} else if (allQuestions[subject]) {
+		const questionPool = [...allQuestions[subject]]
+
+		const questionsPerPlayer = Math.min(
+			difficulty,
+			Math.floor(questionPool.length / gameData.players.length)
+		)
+
+		gameData.players.forEach((player, index) => {
+			gameData.playerQuestions[player.name] = questionPool
+				.filter((_, qIndex) => qIndex % gameData.players.length === index)
+				.slice(0, questionsPerPlayer)
+		})
+	} else {
+		alert('Invalid subject selected!')
+	}
+}
+
+window.startGame = () => {
 	loadQuestions(gameData.subject, gameData.difficulty)
 	gameData.currentTurn = 0
 	renderQuestion()
@@ -205,10 +175,21 @@ const startGame = () => {
 const renderQuestion = () => {
 	const currentPlayer = gameData.players[gameData.currentTurn]
 	const playerQuestions = gameData.playerQuestions[currentPlayer.name]
-	const question = playerQuestions.shift()
+	const question = playerQuestions.find(q => q.selectedAnswer === undefined)
 
 	if (!question) {
-		endGame()
+		gameData.currentTurn = (gameData.currentTurn + 1) % gameData.players.length
+		if (
+			gameData.players.every(player =>
+				gameData.playerQuestions[player.name].every(
+					q => q.selectedAnswer !== undefined
+				)
+			)
+		) {
+			endGame()
+		} else {
+			renderQuestion()
+		}
 		return
 	}
 
@@ -220,32 +201,36 @@ const renderQuestion = () => {
       <h2 style="color:${currentPlayer.color}">It's ${
 		currentPlayer.name
 	}'s turn!</h2>
-      <p>${question.question}</p>
-      ${question.options
-				.map(
-					(option, index) =>
-						`<button style="border: 2px solid ${currentPlayer.color}" onclick="selectAnswer(${index})">${option}</button>`
-				)
-				.join('')}
-      <button id="submit-button" onclick="submitAnswer(${
-				question.correct
-			})" disabled>Submit</button>
+      <p>${question.Question}</p>
+      ${question.Answers.map(
+				(option, index) =>
+					`<button style="border: 2px solid ${currentPlayer.color}" onclick="selectAnswer(${index})">${option}</button>`
+			).join('')}
+      <button id="submit-button" 
+        onclick="submitAnswer('${currentPlayer.name}', '${encodeURIComponent(
+		question.Question
+	)}')"
+        disabled>Submit</button>
       <p>Time left: <span id="timer">${gameData.timeLeft}</span> seconds</p>
     </div>
   `
 
 	gameData.timer = setInterval(() => {
-		gameData.timeLeft--
-		document.getElementById('timer').textContent = gameData.timeLeft
+		const timerElement = document.getElementById('timer')
+		if (timerElement) {
+			timerElement.textContent = gameData.timeLeft
+		}
 
-		if (gameData.timeLeft <= 0) {
+		gameData.timeLeft--
+
+		if (gameData.timeLeft < 0) {
 			clearInterval(gameData.timer)
-			submitAnswer(question.correct)
+			submitAnswer(currentPlayer.name, encodeURIComponent(question.Question))
 		}
 	}, 1000)
 }
 
-const selectAnswer = index => {
+window.selectAnswer = index => {
 	gameData.selectedAnswer = index
 
 	const buttons = document.querySelectorAll('button')
@@ -254,23 +239,34 @@ const selectAnswer = index => {
 			idx === index ? gameData.players[gameData.currentTurn].color : ''
 	})
 
-	document.getElementById('submit-button').disabled = false
+	const submitButton = document.getElementById('submit-button')
+	if (submitButton) {
+		submitButton.disabled = false
+	}
 }
 
-const submitAnswer = correctAnswer => {
+window.submitAnswer = (playerName, questionText) => {
 	clearInterval(gameData.timer)
 
-	const currentPlayer = gameData.players[gameData.currentTurn]
+	const decodedQuestionText = decodeURIComponent(questionText)
 
-	if (gameData.selectedAnswer === correctAnswer) {
-		gameData.scores[currentPlayer.name] += 10
+	const player = gameData.players.find(p => p.name === playerName)
+	const question = gameData.playerQuestions[player.name].find(
+		q => q.Question === decodedQuestionText
+	)
+
+	if (question) {
+		question.selectedAnswer = gameData.selectedAnswer
+
+		if (question.selectedAnswer === question.CorrectAnswer) {
+			gameData.scores[playerName] += 10
+		}
 	}
 
-	gameData.currentTurn = (gameData.currentTurn + 1) % gameData.players.length
 	renderQuestion()
 }
 
-const endGame = () => {
+window.endGame = () => {
 	const results = Object.entries(gameData.scores).sort((a, b) => b[1] - a[1])
 	const maxScore = results[0][1]
 	const winners = results
@@ -286,16 +282,68 @@ const endGame = () => {
 					.map(([name, score]) => `<li>${name}: ${score} points</li>`)
 					.join('')}
       </ul>
+      <button onclick="reviewAnswers()">Review Answers</button>
       <button onclick="startNewGame()">Start New Game</button>
     </div>
   `
 }
 
-const startNewGame = () => {
-	gameData.players = []
-	gameData.playerQuestions = {}
-	gameData.scores = {}
-	clearInterval(gameData.timer)
+window.reviewAnswers = () => {
+	const playerButtonsHTML = gameData.players
+		.map(
+			(player, index) =>
+				`<button style="margin: 10px; padding: 10px; font-size: 16px;" onclick="showPlayerReview(${index})">${player.name}</button>`
+		)
+		.join('')
+
+	document.getElementById('game-container').innerHTML = `
+    <div>
+      <h1>Review Answers</h1>
+      <div style="text-align: center;">
+        ${playerButtonsHTML}
+      </div>
+      <button onclick="startNewGame()" style="margin-top: 20px; padding: 10px; font-size: 16px;">Start New Game</button>
+    </div>
+  `
+}
+
+window.showPlayerReview = playerIndex => {
+	const player = gameData.players[playerIndex]
+	const playerAnswers = gameData.playerQuestions[player.name]
+	const playerReviewHTML = `
+    <div style="padding: 10px; max-width: 800px; margin: 0 auto;">
+      <h2 style="color:${
+				player.color
+			}; text-align: center; margin-bottom: 20px;">${player.name}'s Answers</h2>
+      <ul style="list-style: none; padding: 0; margin: 0;">
+        ${playerAnswers
+					.map(
+						(question, index) =>
+							`<li style="margin-bottom: 5px; border-bottom: 1px solid #ddd; padding: 5px 0;">
+                <p style="margin: 0; font-size: 14px;"><strong>Q${
+									index + 1
+								}:</strong> ${question.Question}</p>
+                <p style="margin: 0; font-size: 13px;"><strong>Correct:</strong> ${
+									question.Answers[question.CorrectAnswer]
+								}</p>
+                <p style="margin: 0; font-size: 13px;"><strong>Your:</strong> ${
+									question.selectedAnswer !== undefined
+										? question.Answers[question.selectedAnswer]
+										: '<em>No Answer</em>'
+								}</p>
+              </li>`
+					)
+					.join('')}
+      </ul>
+      <button onclick="reviewAnswers()" style="margin-top: 20px; padding: 10px; font-size: 14px;">Back</button>
+    </div>
+  `
+
+	document.getElementById('game-container').innerHTML = playerReviewHTML
+}
+
+window.startNewGame = () => {
+	resetGameData()
 	renderPlayersScreen()
 }
 
